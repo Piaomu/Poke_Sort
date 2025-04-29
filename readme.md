@@ -1,6 +1,6 @@
 # PokéSort PSDK - README
 
-PokéSort is a powerful command line tool designed to help you sort your Pokemon, Moves, and Abilities based on given search criteria. PokéSort is a simple script built in Ruby and is compatible with projects built using Pokémon SDK. It is useful for analyzing and filtering large sets of Pokémon game data stored in JSON format. Supports filtering by stats, abilities, moves, and more!
+PokéSort is a powerful command line tool to be used with a game built with Pokemon Studio/PSDK designed to help you sort your Pokemon, Moves, and Abilities based on given search criteria. PokéSort is a simple script built in Ruby and is compatible with projects built using Pokémon SDK. It is useful for analyzing and filtering large sets of Pokémon game data stored in JSON format. Supports filtering by stats, abilities, moves, and more!
 
 ## 🛠 Installation & Setup
 
@@ -34,7 +34,7 @@ gem install thor
 
 ## Initial Setup
 
-while in the directory containing the pokesort script, run the following command:
+while in the directory containing the `pokesort.rb` script, run the following command:
 
 ```bash
 ruby pokesort.rb setup
@@ -42,9 +42,31 @@ ruby pokesort.rb setup
 
 1. Setting the Base Directory: You will be prompted to enter the path to your game's `Data/Studio` directory. This is the main location where your Pokemon, Moves, Abilities, and Dex data are stored. The script will validate the path to ensure it contains the necessary subdirectories (`pokemon`, `dex`, etc.).
 
-2. Configuring the Pokedex Path (Optional): After successfully setting the base directory, you will be asked if you want to configure your pokedex file. If you choose yes, you will be prompted to enter the filename of your dex JSON file (e.g., regional, national). The script will look for this file in the dex subdirectory of your configured base directory and save the full path. If you skip this step, the script will default to looking for regional.json in the dex subdirectory.
+2. Configuring the Pokedex Path (Optional): After successfully setting the base directory, you will be asked if you want to configure your pokedex file. If you choose yes, you will be prompted to enter the filename of your dex JSON file (e.g., regional, national). The script will look for this file in the dex subdirectory of your configured base directory and save the full path. If you skip this step, the script will default to looking for `regional.json` in the dex subdirectory.
 
 This setup process creates a configuration file named .pokesort_config.json in your user's home directory, storing the paths you provide.
+
+### Verify or Change Configuration
+
+To check the current value of your base directory, run:
+
+```bash
+ruby pokesort.rb show_base_dir
+```
+
+To check the currenty-configured Pokedex, run:
+
+```bash
+ruby pokesort.rb show_dex_path
+```
+
+To change the Pokedex, run:
+
+```bash
+ruby pokesort.rb set_dex_path FILENAME
+```
+
+> NOTE: You do not need to add the `.json` file extension to the dex path. If you want to set the regional Pokedex, simply run `set_dex_path regional`
 
 ## Basic Usage
 
@@ -133,16 +155,22 @@ ruby pokesort.rb suggest pokemon chikkly
 These commands are useful if you are trying to get a sense of which Pokemon have specific kinds of movesets. You can filter on the number of unique move-types that a Pokemon has available to them and which pokemon have X moves that have power of X or less.
 
 ```bash
-ruby pokesort.rb filter --has-moves-with-min-power 80 --has-moves-with-unique-types 5
+ruby pokesort.rb filter --entity pokemon --has-moves-with-min-power 80 --has-moves-with-unique-types 5
+```
+
+If you want to sort your Pokemon by their strongest moves in a given category, you can pair `--has-moves-with-min-power` with `--has-move-category`
+
+```bash
+ruby pokesort.rb filter --entity pokemon --has-moves-with-min-power 80 --has-move-category special
 ```
 
 If you want more visibility on exactly which moves and which types are available to any of the Pokemon that are returned from the query, you can opt to print the details of the query to a txt file by using the `--debug-output-file` option (only works for for these specific filters)
 
 ```bash
-poke filter --has-moves-with-min-power 80 --has-moves-with-unique-types 8 --debug-output-file
+ruby pokesort.rb filter --entity pokemon --has-moves-with-min-power 80 --has-moves-with-unique-types 8 --debug-output-file
 ```
 
-The `--debug-output-file` option will print a file with entries like:
+The `--debug-output-file` option is only available for querying Pokemon by move properties and will print a file with entries like:
 
 ```txt
 --- Debug Info for Pokemon: amarreop ---
@@ -164,6 +192,91 @@ Qualifying Moves (Power >= 80): aura_sphere - 80, dazzling_gleam - 80, dig - 80,
 ------------------------------------------------------
 ```
 
+Additionally, you may find that you want to filter on a Pokemon's moves, but only the ones that meet the criteria if they are of category "special", "physical", or "status". Use this parameter to specify one or more categories:
+
+```bash
+ruby pokesort.rb filter --has-moves-with-min-power 80 --has-moves-with-unique-types 8 --has-move-category special
+```
+
+```bash
+ruby pokesort.rb filter --has-moves-with-min-power 100 --has-move-category special, physical
+```
+
+## Order Abilities by Frequency
+
+If you're managing a large database of fakemon or a large number of custom abilities, you may find it useful to count the number of times that certain abilities appear among Pokemon in your database. These queries will count and sort the number of times all abilities appear among Pokemon in your dex and display them in ascending or descending order.
+
+Order by most to least:
+
+```bash
+ruby pokesort.rb filter --entity abilities --order-by-frequency desc
+```
+
+Order by least to most:
+
+```bash
+ruby pokesort.rb filter --entity abilities --order-by-frequency asc
+```
+
+These queries will print the results to the console and will also output a json file that you may choose to save off.
+
+**Console Output (desc):**
+
+```txt
+Calculating ability frequencies...
+Ability Frequencies (ordered by frequency):
+- intimidate: 12
+- early_bird: 11
+- poison_touch: 10
+- vital_spirit: 10
+- clear_body: 10
+- limber: 10
+- levitate: 10
+- volt_absorb: 10
+- pickup: 9
+- compound_eyes: 9
+- frisk: 8
+- shell_armor: 8
+- sand_veil: 8
+- efficiency: 8
+- flash_fire: 8
+```
+
+**JSON File Output:**
+
+```json
+[
+  {
+    "ability": "intimidate",
+    "frequency": 12
+  },
+  {
+    "ability": "early_bird",
+    "frequency": 11
+  },
+  {
+    "ability": "limber",
+    "frequency": 10
+  },
+  {
+    "ability": "clear_body",
+    "frequency": 10
+  },
+  {
+    "ability": "compound_eyes",
+    "frequency": 9
+  },
+  {
+    "ability": "shell_armor",
+    "frequency": 8
+  },
+  {
+    "ability": "sand_veil",
+    "frequency": 8
+  }
+]
+```
+
 ## 📂 Output Structure
 
 ### Default Output Directory:
@@ -177,6 +290,27 @@ output/
 └── moves/
     └── moves_type-fire_minpower-80.json
 ```
+
+You can set a custom output directory by adding the `--output-dir DIRECTORY_NAME` option to your query:
+
+```bash
+ruby pokesort.rb --entity pokemon --can-learn-move flamethrower --output-dir pokemon_by_type/fire
+```
+
+Will output to:
+
+```
+pokemon_by_type/
+        └── fire/
+```
+
+Set a custom file name with `--output-file`
+
+```bash
+ruby pokesort.rb --entity pokemon --type1 fire --type2 flying --output-file flying_fire_pokemon
+```
+
+Will output the file name `flying_fire_pokemon.json`
 
 ## ⚙️Advanced Configuration
 

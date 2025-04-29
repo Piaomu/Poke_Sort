@@ -70,6 +70,7 @@ class PokeTool < Thor
     shell.say "  ruby pokesort.rb filter --has-moves-with-min-power 70 --has-moves-with-unique-types 3", :green # Example for new move-based pokemon filter
     shell.say "  ruby pokesort.rb filter --has-moves-with-min-power 70 --debug-output-file", :green # Example for new debug output option (boolean)
     shell.say "  ruby pokesort.rb filter --has-move-category physical,special --has-move-status", :green # Example for new move property filters
+    shell.say "  ruby pokesort.rb filter --entity ability --order-by-frequency desc", :green # Example for new ability frequency filter
     shell.say "\n", :green
   end
 
@@ -80,7 +81,8 @@ class PokeTool < Thor
     "  --#{option_name}#{' ' * (30 - option_name.length)} #{description}"
   end.join("\n")
 
-desc "setup", "Set up your game data directory path and optionally the pokedex dex path"
+
+  desc "setup", "Set up your game data directory path and optionally the pokedex dex path"
   long_desc <<-LONGDESC
 First-time setup command to configure where your game data is stored.
 You must run this before using any other commands.
@@ -241,6 +243,8 @@ Examples:
   ruby pokesort.rb filter --entity moves --is-punch --category physical # Physical punching moves
   ruby pokesort.rb filter --has-moves-with-min-power 70 --has-moves-with-unique-types 3 # Pokemon with at least 3 unique move types among moves with >= 70 power
   ruby pokesort.rb filter --has-move-category physical,special --has-move-status # Pokemon with moves that are physical OR special AND have a status effect
+  ruby pokesort.rb filter --entity ability --order-by-frequency asc # Order abilities by frequency ascending
+  ruby pokesort.rb filter --entity ability --order-by-frequency desc # Order abilities by frequency descending
 
 
 Output Options:
@@ -282,7 +286,7 @@ Available filters for Moves:
 #{BOOLEAN_MOVE_FILTER_HELP}
 
 Available filters for Abilities:
-  # No specific filters for Abilities yet
+  --order-by-frequency asc/desc Order abilities by their frequency of appearance in Pokemon ability lists.
 
 Available sorting options for Moves:
   --sort-by                    Attribute to sort by (#{MOVE_SORT_KEYS.join(', ')})
@@ -346,12 +350,36 @@ LONGDESC
   option 'debug-output-file', type: :boolean,
     desc: "Enable writing debug info for all matching Pokemon to a text file"
 
+  # Add the new option for ordering abilities by frequency
+  option 'order-by-frequency', type: :string, enum: %w(asc desc),
+                  desc: "Order abilities by frequency (for abilities entity)"
+
 
   def filter
     # Determine the entity based on options, automatically setting to 'pokemon' if any pokemon-specific filter is used
     # Added the new options to the check for pokemon-specific filters
     is_pokemon_filter_used = options['can-learn-move'] || (options['type'] && options[:entity] != 'moves') || options['type1'] || options['type2'] || options['has-type2'] || options['mono-type'] || options['learn-method'] || options['has-moves-with-min-power'] || options['has-moves-with-unique-types'] || options['has-move-category'] || options['has-move-status']
     current_entity = is_pokemon_filter_used ? 'pokemon' : options[:entity]
+
+    # --- Ability Frequency Ordering Logic ---
+    if current_entity == 'abilities' && options['order-by-frequency']
+      say "Calculating ability frequencies...", :bold
+      ability_counts = count_ability_frequencies
+      sorted_abilities = sort_abilities_by_frequency(ability_counts, options['order-by-frequency'])
+
+      # Output to console
+      say "Ability Frequencies (ordered by frequency):", :bold
+      sorted_abilities.each do |ability, count|
+        say "- #{ability}: #{count}"
+      end
+
+      # Save results to a file
+      save_ability_frequency_results(sorted_abilities)
+
+      return # Exit the filter method after processing ability frequency
+    end
+    # --- End Ability Frequency Ordering Logic ---
+
 
     # Use the configured BASE_DIR
     data_dir = File.join(get_base_dir, current_entity)
@@ -429,12 +457,12 @@ LONGDESC
               DEBUG
 
               # Add lines for applied filters
-              debug_info += "Filters Applied:"
               filters_applied_list = []
               filters_applied_list << "Min Power >= #{min_power_threshold}" if options['has-moves-with-min-power']
               filters_applied_list << "Unique Types >= #{options['has-moves-with-unique-types']}" if options['has-moves-with-unique-types']
               filters_applied_list << "Category: #{target_categories.join(', ')}" if target_categories
               filters_applied_list << "Status: true" if target_status
+              debug_info += "Filters Applied:"
               debug_info += " #{filters_applied_list.join(', ')}\n" if filters_applied_list.any?
 
 
@@ -1000,6 +1028,11 @@ LONGDESC
 
 
     def save_results(matched, current_entity) # Receive current_entity here
+      # This method is now only used for saving lists of dbSymbols for entities other than abilities
+      # when the --order-by-frequency option is used for abilities.
+      # The ability frequency results are saved by save_ability_frequency_results.
+      return if current_entity == 'abilities' && options['order-by-frequency']
+
       if matched.empty?
         say "No matching #{current_entity} found", :yellow
         return
@@ -1017,6 +1050,74 @@ LONGDESC
       File.write(output_path, JSON.pretty_generate(output_data))
       say "Saved #{output_data.size} entries to #{output_path}", :green
     end
+
+    # New method to count ability frequencies across all Pokemon
+    def count_ability_frequencies
+      ability_counts = Hash.new(0)
+      pokemon_data_dir = File.join(get_base_dir, 'pokemon')
+      abort "Pokemon data directory #{pokemon_data_dir} doesn't exist" unless Dir.exist?(pokemon_data_dir)
+
+      # Load regional creatures to only count abilities for pokemon in the dex
+      regional_creatures = load_dex
+      regional_pokemon_identifiers = regional_creatures.map { |sym, form| "#{sym}_#{form}" }.to_set
+
+      Dir.glob("#{pokemon_data_dir}/**/*.json").each do |file|
+        begin
+          data = JSON.parse(File.read(file))
+          # Check if the Pokemon is a Specie and is in the regional dex
+          db_symbol = data['dbSymbol']
+          form = data.dig('forms', 0, 'form') || 0
+          pokemon_identifier = "#{db_symbol}_#{form}"
+
+          next unless data['klass'] == 'Specie' && regional_pokemon_identifiers.include?(pokemon_identifier)
+
+          if data['forms']
+            data['forms'].each do |form_data|
+              if form_data['abilities']
+                form_data['abilities'].each do |ability|
+                  # Omit __undef__ ability from counting
+                  next if ability.downcase == '__undef__'
+                  ability_counts[ability.downcase] += 1
+                end
+              end
+            end
+          end
+        rescue => e
+          say "Error processing #{File.basename(file)} for ability counting: #{e.message}", :red
+        end
+      end
+      ability_counts
+    end
+
+    # New method to sort abilities by frequency
+    def sort_abilities_by_frequency(ability_counts, order)
+      sorted = ability_counts.sort_by { |ability, count| count }
+      order == 'desc' ? sorted.reverse : sorted
+    end
+
+    # New method to save ability frequency results
+    def save_ability_frequency_results(sorted_abilities)
+      if sorted_abilities.empty?
+        say "No abilities found to save.", :yellow
+        return
+      end
+
+      output_dir = options[:output_dir] || File.join('output', 'abilities')
+      filename = options[:output_file] || "ability_frequency_#{options['order-by-frequency']}"
+      filename += '.json' unless filename.downcase.end_with?('.json')
+      output_path = File.join(output_dir, filename)
+
+      FileUtils.mkdir_p(output_dir)
+
+      # Format the output data as an array of hashes
+      output_data = sorted_abilities.map do |ability, count|
+        { "ability" => ability, "frequency" => count }
+      end
+
+      File.write(output_path, JSON.pretty_generate(output_data))
+      say "Saved #{output_data.size} ability frequencies to #{output_path}", :green
+    end
+
 
     def generate_filename
        # Determine the entity for filename generation based on options['can-learn-move'] or other pokemon filters
@@ -1048,6 +1149,9 @@ LONGDESC
         end
         filters << "has_status" if options['has-move-status']
 
+      elsif current_entity == 'abilities'
+        # Add ability frequency filter to filename
+        filters << "order_by_frequency-#{options['order-by-frequency']}" if options['order-by-frequency']
 
       elsif current_entity == 'moves'
         filters << "min_power-#{options['min-power']}" if options['min-power']
