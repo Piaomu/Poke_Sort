@@ -1074,10 +1074,16 @@ LONGDESC
           if data['forms']
             data['forms'].each do |form_data|
               if form_data['abilities']
+                # Use a Set to track unique abilities for the current Pokemon
+                unique_abilities_for_pokemon = Set.new
                 form_data['abilities'].each do |ability|
-                  # Omit __undef__ ability from counting
+                  # Omit __undef__ ability and add unique abilities to the set
                   next if ability.downcase == '__undef__'
-                  ability_counts[ability.downcase] += 1
+                  unique_abilities_for_pokemon << ability.downcase
+                end
+                # Increment global count for each unique ability on this Pokemon
+                unique_abilities_for_pokemon.each do |ability|
+                  ability_counts[ability] += 1
                 end
               end
             end
