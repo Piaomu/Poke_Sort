@@ -277,6 +277,8 @@ Ability Frequencies (ordered by frequency):
 ]
 ```
 
+> NOTE: When using the `--order-by-frequency` option on abilities, you will be prompted to choose whether you want to count the ability on each of a Pokemon's forms, or count it just once per Pokemon.
+
 ## 📂 Output Structure
 
 ### Default Output Directory:

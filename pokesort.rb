@@ -3,8 +3,8 @@ require 'thor'
 require 'fileutils'
 require 'set'
 
-class PokeTool < Thor
-  package_name "PokeTool"
+class PokeSort < Thor
+  package_name "PokeSort"
   default_task :filter
 
   # Configuration file path - located in the user's home directory
@@ -62,14 +62,14 @@ class PokeTool < Thor
     shell.say "  ruby pokesort.rb filter --entity moves --sort-by power --sort-order desc", :green
     shell.say "  ruby pokesort.rb filter --entity moves --type fire --min-power 80", :green
     shell.say "  ruby pokesort.rb filter --can-learn-move earthquake", :green
-    shell.say "  ruby pokesort.rb filter --type water --has-type2", :green # Example for new type filter
-    shell.say "  ruby pokesort.rb list_learn_methods", :green # Example for new command
-    shell.say "  ruby pokesort.rb filter --entity moves --is-punch --category physical", :green # Example for new move filters
+    shell.say "  ruby pokesort.rb filter --type water --has-type2", :green # Example for type filter
+    shell.say "  ruby pokesort.rb list_learn_methods", :green # Example for listing move-learn methods command
+    shell.say "  ruby pokesort.rb filter --entity moves --is-punch --category physical", :green # Example for move filters
     shell.say "  ruby pokesort.rb set_dex_path regional", :green # Example for new config command (simplified)
     shell.say "  ruby pokesort.rb suggest pokemon chikkly", :green
-    shell.say "  ruby pokesort.rb filter --has-moves-with-min-power 70 --has-moves-with-unique-types 3", :green # Example for new move-based pokemon filter
-    shell.say "  ruby pokesort.rb filter --has-moves-with-min-power 70 --debug-output-file", :green # Example for new debug output option (boolean)
-    shell.say "  ruby pokesort.rb filter --has-move-category physical,special --has-move-status", :green # Example for new move property filters
+    shell.say "  ruby pokesort.rb filter --has-moves-with-min-power 70 --has-moves-with-unique-types 3", :green # Example for move-based pokemon filter
+    shell.say "  ruby pokesort.rb filter --has-moves-with-min-power 70 --debug-output-file", :green # Example for debug output option (boolean)
+    shell.say "  ruby pokesort.rb filter --has-move-category physical,special --has-move-status", :green # Example for move property filters
     shell.say "  ruby pokesort.rb filter --entity ability --order-by-frequency desc", :green # Example for new ability frequency filter
     shell.say "\n", :green
   end
@@ -126,7 +126,7 @@ LONGDESC
 
 
       if File.directory?(pokemon_dir) && File.directory?(dex_dir) # Check for dex directory existence
-        # Save the base_dir directly to the config file for simplicity
+        # Save the base_dir directly to the config file
         # Load existing config first to preserve other settings if they exist
         current_config = load_config # Load existing config
         current_config['base_dir'] = File.expand_path(path) # Set the new base_dir
@@ -204,8 +204,6 @@ Example:
   ruby pokesort.rb set_dex_path national
 LONGDESC
   def set_dex_path(dex_filename)
-    # check_base_dir_configured is called in initialize, so no need to call here again
-
     base_dir = get_base_dir # Get the configured BASE_DIR
     # Construct the full path based on the configured BASE_DIR and the 'dex' subdirectory
     dex_file_path = File.join(base_dir, 'dex', "#{dex_filename}.json")
@@ -219,7 +217,7 @@ LONGDESC
     config = load_config
     config['dex_path'] = File.expand_path(dex_file_path) # Save absolute path
     save_config(config)
-    @config = config # Update instance variable
+    @config = config
 
     say "Pokedex path set to: #{@config['dex_path']}", :green
   end
@@ -326,7 +324,6 @@ LONGDESC
     option prop.gsub(/(.)([A-Z])/, '\1-\2').downcase, type: :boolean, desc: "Filter for #{prop.gsub('is', '').gsub(/(.)([A-Z])/, '\1 \2').downcase} moves"
   end
 
-
   # Filter for Pokemon by learnable move and other Pokemon filters
   option 'can-learn-move', type: :string, desc: "Filter Pokemon by a move they can learn"
   option 'type1', type: :string, desc: "Filter Pokemon by primary type"
@@ -335,13 +332,13 @@ LONGDESC
   option 'mono-type', type: :boolean, desc: "Filter for Pokemon with only one type"
   option 'learn-method', type: :string, desc: "Filter Pokemon by move learn method (used with --can-learn-move)"
 
-  # Add new move-based filter options for Pokemon
+  #  Move-based filter options for Pokemon
   option 'has-moves-with-min-power', type: :numeric,
     desc: "Moves must have at least this power to be counted towards unique types and count"
   option 'has-moves-with-unique-types', type: :numeric,
     desc: "Requires this many unique move types among qualifying moves"
 
-  # Add the new move property filters for Pokemon
+  # Move property filters for Pokemon
   option 'has-move-category', type: :array, desc: "Filter by move category (physical, special, status). Can provide multiple comma-separated.",
     enum: %w(physical special status)
   option 'has-move-status', type: :boolean, desc: "Filter for Pokemon with moves that inflict a status condition."
@@ -354,17 +351,19 @@ LONGDESC
   option 'order-by-frequency', type: :string, enum: %w(asc desc),
                   desc: "Order abilities by frequency (for abilities entity)"
 
-
   def filter
     # Determine the entity based on options, automatically setting to 'pokemon' if any pokemon-specific filter is used
-    # Added the new options to the check for pokemon-specific filters
     is_pokemon_filter_used = options['can-learn-move'] || (options['type'] && options[:entity] != 'moves') || options['type1'] || options['type2'] || options['has-type2'] || options['mono-type'] || options['learn-method'] || options['has-moves-with-min-power'] || options['has-moves-with-unique-types'] || options['has-move-category'] || options['has-move-status']
     current_entity = is_pokemon_filter_used ? 'pokemon' : options[:entity]
 
     # --- Ability Frequency Ordering Logic ---
     if current_entity == 'abilities' && options['order-by-frequency']
       say "Calculating ability frequencies...", :bold
-      ability_counts = count_ability_frequencies
+
+      # Prompt user for counting method
+      count_per_form = yes?("Count abilities per Pokemon form? (y/n)", :bold)
+
+      ability_counts = count_ability_frequencies(count_per_form) # Pass the counting method choice
       sorted_abilities = sort_abilities_by_frequency(ability_counts, options['order-by-frequency'])
 
       # Output to console
@@ -374,13 +373,12 @@ LONGDESC
       end
 
       # Save results to a file
-      save_ability_frequency_results(sorted_abilities)
+      save_ability_frequency_results(sorted_abilities, count_per_form) # Pass counting method for filename
 
       return # Exit the filter method after processing ability frequency
     end
     # --- End Ability Frequency Ordering Logic ---
-
-
+    
     # Use the configured BASE_DIR
     data_dir = File.join(get_base_dir, current_entity)
     abort "Directory #{data_dir} doesn't exist" unless Dir.exist?(data_dir)
@@ -465,7 +463,6 @@ LONGDESC
               debug_info += "Filters Applied:"
               debug_info += " #{filters_applied_list.join(', ')}\n" if filters_applied_list.any?
 
-
               debug_info += "Qualifying Move Types (from moves meeting criteria): #{valid_move_types.to_a.sort.join(', ')}\n"
               debug_info += "Qualifying Moves (meeting criteria):\n"
               if qualifying_moves_details.any?
@@ -473,7 +470,6 @@ LONGDESC
               else
                  debug_info += "  None\n"
               end
-
 
               debug_info += "------------------------------------------------------\n\n"
               file.write(debug_info)
@@ -517,10 +513,7 @@ LONGDESC
                                     true # No status filter applied
                                   end
 
-
-            # A move is "qualifying" for debug output if it meets the power threshold AND any specified category/status filters
             if meets_power_threshold && meets_category_filter && meets_status_filter
-               # Collect details for the debug output list
                move_detail = move_data['dbSymbol']
                move_detail += " - #{move_data['power']}" if options['has-moves-with-min-power']
                move_detail += " (Category: #{move_data['category'].to_s.downcase})" if target_categories
@@ -529,7 +522,7 @@ LONGDESC
 
 
                qualifying_moves_details << move_detail
-               valid_move_types.add(move_data['type'].downcase) # Still track unique types from qualifying moves
+               valid_move_types.add(move_data['type'].downcase)
             end
           end
 
@@ -575,8 +568,6 @@ Examples:
   ruby pokesort.rb list moves
 LONGDESC
   def list(entity)
-    # check_base_dir_configured is called in initialize, so no need to call here again
-
     case entity.downcase
     when 'pokemon'
       # Use the dex path from the configuration
@@ -605,8 +596,6 @@ LONGDESC
       ruby pokesort.rb suggest move beam
     LONGDESC
   def suggest(type, name)
-    # check_base_dir_configured is called in initialize, so no need to call here again
-
     names = case type.downcase
             when 'pokemon' then load_dex.map { |(sym, _)| sym } # Use the dex path from the configuration
             when 'move'    then list_entries('moves') # list_entries now uses configured BASE_DIR
@@ -629,7 +618,6 @@ LONGDESC
       ruby pokesort.rb show_base_dir
     LONGDESC
   def show_base_dir
-    # check_base_dir_configured is called in initialize, so no need to call here again
     say "Configured Base Directory: #{get_base_dir}", :green
   end
 
@@ -670,8 +658,6 @@ LONGDESC
       ruby pokesort.rb list_learn_methods
     LONGDESC
   def list_learn_methods
-    # check_base_dir_configured is called in initialize, so no need to call here again
-
     pokemon_data_dir = File.join(get_base_dir, 'pokemon') # Use configured BASE_DIR
     abort "Pokemon data directory #{pokemon_data_dir} doesn't exist" unless Dir.exist?(pokemon_data_dir)
 
@@ -707,7 +693,6 @@ LONGDESC
 
   no_commands do
     # Load configuration from file
-    # This now loads the whole config file, not just base_dir
     def load_config
       if File.exist?(CONFIG_FILE)
         JSON.parse(File.read(CONFIG_FILE))
@@ -747,8 +732,6 @@ LONGDESC
 
     # Load dex using the configured path
     def load_dex
-      # check_base_dir_configured is called in initialize, so no need to call here again
-
       config = @config # Use the instance variable config
       # Use the configured dex_path if available, otherwise construct default from configured BASE_DIR
       dex_path = config['dex_path'] || File.join(get_base_dir, DEFAULT_DEX_SUBPATH)
@@ -778,7 +761,7 @@ LONGDESC
       Dir.glob("#{data_dir}/**/*.json").each do |file|
         begin
           data = JSON.parse(File.read(file))
-          # valid_entry? uses options[:entity] which is available
+
           next unless valid_entry?(data, regional_creatures)
 
           # Check if the Pokemon meets the criteria first
@@ -791,13 +774,10 @@ LONGDESC
         end
       end
 
-      matched # Return the collected matches
+      matched
     end
 
     def valid_entry?(data, regional_creatures)
-      # This method's logic remains largely the same, it uses the regional_creatures set
-      # which is loaded via load_dex (which uses the configured BASE_DIR)
-      # and options[:entity] which is passed from the calling command.
       return true unless options[:entity] == 'pokemon'
       db_symbol = data['dbSymbol']
       form = data.dig('forms', 0, 'form') || 0
@@ -815,7 +795,6 @@ LONGDESC
       if current_entity == 'pokemon'
         form = data['forms']&.first || {}
 
-        # Existing Pokémon filters
         stat_match = STATS.keys.all? do |stat|
           min = options["min-#{stat}"]
           max = options["max-#{stat}"]
@@ -846,7 +825,6 @@ LONGDESC
                                  true # No --can-learn-move filter applied
                                end
 
-        # New Pokemon filtering criteria
         type1 = form['type1'].to_s.downcase if form['type1']
         type2 = form['type2'].to_s.downcase if form['type2']
 
@@ -979,7 +957,6 @@ LONGDESC
                    (!options['max-pp'] || pp <= options['max-pp']) &&
                    (!options['pp'] || pp == options['pp'])
 
-        # New move filters
         battle_engine_method_match = !options['battle_engine_method'] || (battle_engine_method && battle_engine_method == options['battle_engine_method'].downcase)
         category_match = !options['category'] || (category && category == options['category'].downcase)
 
@@ -997,7 +974,6 @@ LONGDESC
             true
           end
         end
-
 
         power_match && accuracy_match && type_match && priority_match && pp_match && battle_engine_method_match && category_match && boolean_property_matches
       else
@@ -1017,7 +993,7 @@ LONGDESC
           case value
           when Numeric then value
           when String then value
-          when nil then 0 # Or handle nil differently if preferred
+          when nil then 0
           else value.to_s
           end
         end
@@ -1051,8 +1027,9 @@ LONGDESC
       say "Saved #{output_data.size} entries to #{output_path}", :green
     end
 
-    # New method to count ability frequencies across all Pokemon
-    def count_ability_frequencies
+    # Count ability frequencies across all Pokemon
+    # Accepts a boolean parameter to determine counting method
+    def count_ability_frequencies(count_per_form)
       ability_counts = Hash.new(0)
       pokemon_data_dir = File.join(get_base_dir, 'pokemon')
       abort "Pokemon data directory #{pokemon_data_dir} doesn't exist" unless Dir.exist?(pokemon_data_dir)
@@ -1061,48 +1038,94 @@ LONGDESC
       regional_creatures = load_dex
       regional_pokemon_identifiers = regional_creatures.map { |sym, form| "#{sym}_#{form}" }.to_set
 
-      Dir.glob("#{pokemon_data_dir}/**/*.json").each do |file|
-        begin
-          data = JSON.parse(File.read(file))
-          # Check if the Pokemon is a Specie and is in the regional dex
-          db_symbol = data['dbSymbol']
-          form = data.dig('forms', 0, 'form') || 0
-          pokemon_identifier = "#{db_symbol}_#{form}"
+      # If counting per form, iterate directly through files and forms
+      if count_per_form
+        Dir.glob("#{pokemon_data_dir}/**/*.json").each do |file|
+          begin
+            data = JSON.parse(File.read(file))
+            # Check if the Pokemon is a Specie and is in the configured dex (using the first form for the check)
+            db_symbol = data['dbSymbol']
+            form = data.dig('forms', 0, 'form') || 0 # Use the first form for the configured dex check
+            pokemon_identifier = "#{db_symbol}_#{form}"
 
-          next unless data['klass'] == 'Specie' && regional_pokemon_identifiers.include?(pokemon_identifier)
-
-          if data['forms']
-            data['forms'].each do |form_data|
-              if form_data['abilities']
-                # Use a Set to track unique abilities for the current Pokemon
-                unique_abilities_for_pokemon = Set.new
-                form_data['abilities'].each do |ability|
-                  # Omit __undef__ ability and add unique abilities to the set
-                  next if ability.downcase == '__undef__'
-                  unique_abilities_for_pokemon << ability.downcase
-                end
-                # Increment global count for each unique ability on this Pokemon
-                unique_abilities_for_pokemon.each do |ability|
-                  ability_counts[ability] += 1
+            if data['klass'] == 'Specie' && regional_pokemon_identifiers.include?(pokemon_identifier)
+              if data['forms']
+                data['forms'].each do |form_data|
+                  if form_data['abilities']
+                    # Use a Set to track unique abilities for the current form
+                    unique_abilities_for_form = Set.new
+                    form_data['abilities'].each do |ability|
+                      # Omit __undef__ ability and add unique abilities to the set
+                      next if ability.downcase == '__undef__'
+                      unique_abilities_for_form << ability.downcase
+                    end
+                    # Increment global count for each unique ability on this form
+                    unique_abilities_for_form.each do |ability|
+                      ability_counts[ability] += 1
+                    end
+                  end
                 end
               end
             end
+          rescue => e
+            say "Error processing #{File.basename(file)} for ability counting (per form): #{e.message}", :red
           end
-        rescue => e
-          say "Error processing #{File.basename(file)} for ability counting: #{e.message}", :red
+        end
+      else # Count once per Pokemon (unique across all forms)
+        # Group pokemon data by dbSymbol to count abilities per pokemon, not per form
+        pokemon_by_symbol = Hash.new { |hash, key| hash[key] = [] }
+        Dir.glob("#{pokemon_data_dir}/**/*.json").each do |file|
+          begin
+            data = JSON.parse(File.read(file))
+            # Check if the Pokemon is a Specie and is in the configured dex (using the first form for the check)
+            db_symbol = data['dbSymbol']
+            form = data.dig('forms', 0, 'form') || 0 # Use the first form for the configured dex check
+            pokemon_identifier = "#{db_symbol}_#{form}"
+
+            if data['klass'] == 'Specie' && regional_pokemon_identifiers.include?(pokemon_identifier)
+               pokemon_by_symbol[db_symbol] << data # Store the data for this pokemon (all forms)
+            end
+          rescue => e
+            say "Error processing #{File.basename(file)} for grouping: #{e.message}", :red
+          end
+        end
+
+        # Iterate through the grouped pokemon data
+        pokemon_by_symbol.each do |db_symbol, pokemon_data_list|
+          unique_abilities_across_forms = Set.new
+          pokemon_data_list.each do |pokemon_data| # Iterate through each form's data for this symbol
+             if pokemon_data['forms']
+                pokemon_data['forms'].each do |form_data|
+                   if form_data['abilities']
+                      form_data['abilities'].each do |ability|
+                         # Omit __undef__ ability and add unique abilities to the set across all forms
+                         next if ability.downcase == '__undef__'
+                         unique_abilities_across_forms << ability.downcase
+                      end
+                   end
+                end
+             end
+          end
+
+          # Increment global count for each unique ability found across all forms of this Pokemon
+          unique_abilities_across_forms.each do |ability|
+            ability_counts[ability] += 1
+          end
         end
       end
+
       ability_counts
     end
 
-    # New method to sort abilities by frequency
+    # Sort all abilities by frequency
     def sort_abilities_by_frequency(ability_counts, order)
       sorted = ability_counts.sort_by { |ability, count| count }
       order == 'desc' ? sorted.reverse : sorted
     end
 
-    # New method to save ability frequency results
-    def save_ability_frequency_results(sorted_abilities)
+    # Save ability frequency results
+    # Accepts a boolean parameter to include counting method in filename
+    def save_ability_frequency_results(sorted_abilities, count_per_form)
       if sorted_abilities.empty?
         say "No abilities found to save.", :yellow
         return
@@ -1110,6 +1133,8 @@ LONGDESC
 
       output_dir = options[:output_dir] || File.join('output', 'abilities')
       filename = options[:output_file] || "ability_frequency_#{options['order-by-frequency']}"
+      # Add counting method to filename if counting per form
+      filename += "_per_form" if count_per_form
       filename += '.json' unless filename.downcase.end_with?('.json')
       output_path = File.join(output_dir, filename)
 
@@ -1158,6 +1183,8 @@ LONGDESC
       elsif current_entity == 'abilities'
         # Add ability frequency filter to filename
         filters << "order_by_frequency-#{options['order-by-frequency']}" if options['order-by-frequency']
+        # Add counting method to filename if counting per form (only if the option was used)
+        # We need to check the options again here or pass the choice
 
       elsif current_entity == 'moves'
         filters << "min_power-#{options['min-power']}" if options['min-power']
@@ -1198,4 +1225,4 @@ LONGDESC
   end
 end
 
-PokeTool.start(ARGV)
+PokeSort.start(ARGV)
