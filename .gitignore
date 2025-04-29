@@ -1,0 +1,5 @@
+# Ignore the archetypes directory
+archetypes/
+
+# Ignore the output directory
+output/
