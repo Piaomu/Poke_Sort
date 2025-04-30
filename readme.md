@@ -153,8 +153,8 @@ ruby pokesort.rb list pokemon
 # List all moves
 ruby pokesort.rb list moves
 
-# Suggest similar names
-ruby pokesort.rb suggest pokemon chikkly
+# Suggest similar names - this query will suggest bulbasaur, buizel, assuming your pokedex is configured to a population that contains both of those Pokemon
+ruby pokesort.rb suggest pokemon bu
 ```
 
 ## Filter Pokemon by Moveset Properties
