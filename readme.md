@@ -1,6 +1,6 @@
 # PokéSort PSDK - README
 
-PokéSort is a powerful command line tool to be used with a game built with Pokemon Studio/PSDK designed to help you sort your Pokemon, Moves, and Abilities based on given search criteria. PokéSort is a simple script built in Ruby and is compatible with projects built using Pokémon SDK. It is useful for analyzing and filtering large sets of Pokémon game data stored in JSON format. Supports filtering by stats, abilities, moves, and more!
+PokéSort is a powerful command line data analysis tool to be used with a game built with Pokemon Studio/PSDK designed to help you sort and analyze your Pokemon, Moves, and Abilities data based on given search criteria. It is useful for analyzing and filtering large sets of Pokémon game data stored in JSON format. It currently supports filtering and sorting stats, abilities, and moves.
 
 ## 🛠 Installation & Setup
 
@@ -125,6 +125,13 @@ ruby pokesort.rb filter --battle_engine_method s_basic
 ruby pokesort.rb filter --min-spd 90 --output-dir competitive --output-file ou_tier.json
 ```
 
+````bash
+# find all Pokemon that can/cannot evolve
+ruby pokesort.rb filter --entity pokemon --can-evolve
+
+ruby pokesort.rb filter --entity pokemon --cannot-evolve
+```
+
 ## Move Analysis
 
 ```bash
@@ -133,7 +140,7 @@ ruby pokesort.rb filter --entity moves --type fire --min-power 80 --sort-by powe
 
 # Find priority moves
 ruby pokesort.rb filter --entity moves --min-priority 1 --sort-by priority
-```
+````
 
 ## Data Exploration
 
