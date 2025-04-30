@@ -65,12 +65,14 @@ class PokeSort < Thor
     shell.say "  ruby pokesort.rb filter --type water --has-type2", :green # Example for type filter
     shell.say "  ruby pokesort.rb list_learn_methods", :green # Example for listing move-learn methods command
     shell.say "  ruby pokesort.rb filter --entity moves --is-punch --category physical", :green # Example for move filters
-    shell.say "  ruby pokesort.rb set_dex_path regional", :green # Example for new config command (simplified)
+    shell.say "  ruby pokesort.rb set_dex_path regional", :green # Example for config command (simplified)
     shell.say "  ruby pokesort.rb suggest pokemon chikkly", :green
     shell.say "  ruby pokesort.rb filter --has-moves-with-min-power 70 --has-moves-with-unique-types 3", :green # Example for move-based pokemon filter
     shell.say "  ruby pokesort.rb filter --has-moves-with-min-power 70 --debug-output-file", :green # Example for debug output option (boolean)
     shell.say "  ruby pokesort.rb filter --has-move-category physical,special --has-move-status", :green # Example for move property filters
-    shell.say "  ruby pokesort.rb filter --entity ability --order-by-frequency desc", :green # Example for new ability frequency filter
+    shell.say "  ruby pokesort.rb filter --entity ability --order-by-frequency desc", :green # Example for ability frequency filter
+    shell.say "  ruby pokesort.rb filter --can-evolve", :green # Example for evolution filter
+    shell.say "  ruby pokesort.rb filter --cannot-evolve", :green # Example for evolution filter
     shell.say "\n", :green
   end
 
@@ -145,7 +147,7 @@ LONGDESC
       end
     end
 
-    # --- New part to configure dex path ---
+    # --- configure dex path ---
     if base_dir_set
       say "\nNow, let's configure your Pokedex Path (optional -- default Pokedex is regional).", :bold
       say "This is the JSON file in the 'dex' subdirectory that lists the Pokemon in your game.", :green
@@ -184,7 +186,6 @@ LONGDESC
          say "You can set it later using the 'ruby pokesort.rb set_dex_path' command.", :yellow
       end
     end
-    # --- End of new part ---
 
     say "\nSetup complete! \nPlease run: 'ruby pokestart.rb help' for more information on how to use PokeSort", :green
   end
@@ -240,9 +241,11 @@ Examples:
   ruby pokesort.rb filter --type water --has-type2               # Water type Pokemon with a secondary type
   ruby pokesort.rb filter --entity moves --is-punch --category physical # Physical punching moves
   ruby pokesort.rb filter --has-moves-with-min-power 70 --has-moves-with-unique-types 3 # Pokemon with at least 3 unique move types among moves with >= 70 power
-  ruby pokesort.rb filter --has-move-category physical,special --has-move-status # Pokemon with moves that are physical OR special AND have a status effect
-  ruby pokesort.rb filter --entity ability --order-by-frequency asc # Order abilities by frequency ascending
-  ruby pokesort.rb filter --entity ability --order-by-frequency desc # Order abilities by frequency descending
+  ruby pokesort.rb filter --has-moves-with-min-power 70 --debug-output-file", :green # Example for debug output option (boolean)
+  ruby pokesort.rb filter --has-move-category physical,special --has-move-status", :green # Example for move property filters
+  ruby pokesort.rb filter --entity ability --order-by-frequency desc", :green # Example for ability frequency filter
+  ruby pokesort.rb filter --can-evolve # Filter for Pokemon that can evolve
+  ruby pokesort.rb filter --cannot-evolve # Filter for Pokemon that cannot evolve
 
 
 Output Options:
@@ -256,8 +259,8 @@ Available filters for Pokémon:
   --move                       Filter by learnable move (deprecated, use --can-learn-move)
   --can-learn-move N           Filter by learnable move (N is move dbSymbol)
   --type N                     Filter by primary or secondary type
-  --type1 N                    Filter by primary type
-  --type2 N                    Filter by secondary type
+  --type1 N                     Filter by primary type
+  --type2 N                     Filter by secondary type
   --has-type2                  Filter for Pokemon with a secondary type
   --mono-type                  Filter for Pokemon with only one type
   --learn-method N             Filter by move learn method (used with --can-learn-move)
@@ -265,6 +268,8 @@ Available filters for Pokémon:
   --has-moves-with-unique-types X Require X unique move types among qualifying moves
   --has-move-category CATEGORY Filter by move category (physical, special, status). Can provide multiple comma-separated.
   --has-move-status            Filter for Pokemon with moves that inflict a status condition.
+  --can-evolve                 Filter for Pokemon that can evolve (have a non-empty evolutions array)
+  --cannot-evolve              Filter for Pokemon that cannot evolve (have an empty evolutions array)
 
 
 Available filters for Moves:
@@ -343,17 +348,22 @@ LONGDESC
     enum: %w(physical special status)
   option 'has-move-status', type: :boolean, desc: "Filter for Pokemon with moves that inflict a status condition."
 
-  # Add the new option for writing debug output to a file (now a boolean flag)
+  # Add option for writing debug output to a file (now a boolean flag)
   option 'debug-output-file', type: :boolean,
     desc: "Enable writing debug info for all matching Pokemon to a text file"
 
-  # Add the new option for ordering abilities by frequency
+  # Add option for ordering abilities by frequency
   option 'order-by-frequency', type: :string, enum: %w(asc desc),
                   desc: "Order abilities by frequency (for abilities entity)"
 
+  # Add evolution filters
+  option 'can-evolve', type: :boolean, desc: "Filter for Pokemon that can evolve (have a non-empty evolutions array)"
+  option 'cannot-evolve', type: :boolean, desc: "Filter for Pokemon that cannot evolve (have an empty evolutions array)"
+
+
   def filter
     # Determine the entity based on options, automatically setting to 'pokemon' if any pokemon-specific filter is used
-    is_pokemon_filter_used = options['can-learn-move'] || (options['type'] && options[:entity] != 'moves') || options['type1'] || options['type2'] || options['has-type2'] || options['mono-type'] || options['learn-method'] || options['has-moves-with-min-power'] || options['has-moves-with-unique-types'] || options['has-move-category'] || options['has-move-status']
+    is_pokemon_filter_used = options['can-learn-move'] || (options['type'] && options[:entity] != 'moves') || options['type1'] || options['type2'] || options['has-type2'] || options['mono-type'] || options['learn-method'] || options['has-moves-with-min-power'] || options['has-moves-with-unique-types'] || options['has-move-category'] || options['has-move-status'] || options['can-evolve'] || options['cannot-evolve']
     current_entity = is_pokemon_filter_used ? 'pokemon' : options[:entity]
 
     # --- Ability Frequency Ordering Logic ---
@@ -378,7 +388,7 @@ LONGDESC
       return # Exit the filter method after processing ability frequency
     end
     # --- End Ability Frequency Ordering Logic ---
-    
+
     # Use the configured BASE_DIR
     data_dir = File.join(get_base_dir, current_entity)
     abort "Directory #{data_dir} doesn't exist" unless Dir.exist?(data_dir)
@@ -408,7 +418,7 @@ LONGDESC
             matched.each_with_index do |data, index|
               form = data['forms']&.first || {}
               valid_move_types = Set.new
-              qualifying_moves_details = []
+              qualifying_moves_details = Set.new # Use a Set for unique move details
               min_power_threshold = options['has-moves-with-min-power'] || 0
               target_categories = options['has-move-category'] # Array of categories or nil
               target_status = options['has-move-status'] # Boolean or nil
@@ -445,7 +455,7 @@ LONGDESC
                    move_detail += " (Status: #{move_data['moveStatus'].to_s})" if target_status && move_data['moveStatus'] && !move_data['moveStatus'].empty?
                    move_detail += " (Status: none)" if target_status && (!move_data['moveStatus'] || move_data['moveStatus'].empty?)
 
-                   qualifying_moves_details << move_detail
+                   qualifying_moves_details << move_detail # Add to the Set for uniqueness
                    valid_move_types.add(move_data['type'].downcase) # Still track unique types from qualifying moves
                 end
               end
@@ -466,7 +476,8 @@ LONGDESC
               debug_info += "Qualifying Move Types (from moves meeting criteria): #{valid_move_types.to_a.sort.join(', ')}\n"
               debug_info += "Qualifying Moves (meeting criteria):\n"
               if qualifying_moves_details.any?
-                 debug_info += qualifying_moves_details.sort.map { |detail| "  #{detail}" }.join("\n") + "\n"
+                 # Convert Set to Array and sort for consistent output
+                 debug_info += qualifying_moves_details.to_a.sort.map { |detail| "  #{detail}" }.join("\n") + "\n"
               else
                  debug_info += "  None\n"
               end
@@ -485,7 +496,7 @@ LONGDESC
         matched.first(3).each_with_index do |data, index|
           form = data['forms']&.first || {}
           valid_move_types = Set.new
-          qualifying_moves_details = []
+          qualifying_moves_details = Set.new # Use a Set for unique move details
           min_power_threshold = options['has-moves-with-min-power'] || 0
           target_categories = options['has-move-category'] # Array of categories or nil
           target_status = options['has-move-status'] # Boolean or nil
@@ -521,7 +532,7 @@ LONGDESC
                move_detail += " (Status: none)" if target_status && (!move_data['moveStatus'] || move_data['moveStatus'].empty?)
 
 
-               qualifying_moves_details << move_detail
+               qualifying_moves_details << move_detail # Add to the Set for uniqueness
                valid_move_types.add(move_data['type'].downcase)
             end
           end
@@ -541,7 +552,8 @@ LONGDESC
           say "Qualifying Move Types (from moves meeting criteria): #{valid_move_types.to_a.sort.join(', ')}", :blue
           say "Qualifying Moves (meeting criteria):", :blue
           if qualifying_moves_details.any?
-             qualifying_moves_details.sort.each { |detail| say "  #{detail}", :blue }
+             # Convert Set to Array and sort for consistent output
+             qualifying_moves_details.to_a.sort.each { |detail| say "  #{detail}", :blue }
           else
              say "  None", :blue
           end
@@ -787,8 +799,8 @@ LONGDESC
 
     def meets_criteria?(data)
       # Determine the entity for filtering logic based on options['can-learn-move'] or other pokemon filters
-       # Added the new options to the check for pokemon-specific filters
-      is_pokemon_filter_used = options['can-learn-move'] || (options['type'] && options[:entity] != 'moves') || options['type1'] || options['type2'] || options['has-type2'] || options['mono-type'] || options['learn-method'] || options['has-moves-with-min-power'] || options['has-moves-with-unique-types'] || options['has-move-category'] || options['has-move-status']
+       # Added the options to the check for pokemon-specific filters
+      is_pokemon_filter_used = options['can-learn-move'] || (options['type'] && options[:entity] != 'moves') || options['type1'] || options['type2'] || options['has-type2'] || options['mono-type'] || options['learn-method'] || options['has-moves-with-min-power'] || options['has-moves-with-unique-types'] || options['has-move-category'] || options['has-move-status'] || options['can-evolve'] || options['cannot-evolve']
       current_entity = is_pokemon_filter_used ? 'pokemon' : options[:entity]
 
 
@@ -860,17 +872,18 @@ LONGDESC
             end
         end
 
-        # --- New move-based Pokemon filtering logic ---
+        # --- move-based Pokemon filtering logic ---
         move_based_pokemon_match = true # Assume true if no move-based filters are used
 
-        if options['has-moves-with-min-power'] || options['has-moves-with-unique-types']
+        # Only apply move-based filters if at least one is specified
+        if options['has-moves-with-min-power'] || options['has-moves-with-unique-types'] || options['has-move-category'] || options['has-move-status']
           valid_move_types = Set.new
-          # qualifying_moves_count is calculated here but not directly used for the final match
-          # as the unique types check is the primary condition.
-          # It's kept for clarity and potential future use.
-          qualifying_moves_count = 0
+          qualifying_moves_symbols = Set.new # Use a Set to store unique move symbols
           min_power_threshold = options['has-moves-with-min-power'] || 0 # Default to 0 if not specified
           required_unique_types = options['has-moves-with-unique-types'] || 0 # Default to 0 if not specified
+          target_categories = options['has-move-category'] # Array of categories or nil
+          target_status = options['has-move-status'] # Boolean or nil
+
 
           (form['moveSet'] || []).each do |move_entry|
             move_symbol = move_entry['move'].downcase
@@ -879,54 +892,73 @@ LONGDESC
             # Skip if move data isn't loaded (shouldn't happen with preloading, but safe check)
             next unless move_data
 
-            # Check minimum power requirement
-            if move_data['power'].to_i >= min_power_threshold
-              qualifying_moves_count += 1
-              valid_move_types.add(move_data['type'].downcase)
+            # Check if move meets ALL specified move-based criteria
+            meets_power_threshold = !options['has-moves-with-min-power'] || move_data['power'].to_i >= min_power_threshold
+
+            meets_category_filter = if target_categories
+                                      move_category = move_data['category'].to_s.downcase
+                                      target_categories.include?(move_category)
+                                    else
+                                      true # No category filter applied
+                                    end
+
+            meets_status_filter = if target_status
+                                    move_data['moveStatus'] && !move_data['moveStatus'].empty?
+                                  else
+                                    true # No status filter applied
+                                  end
+
+            # A move is "qualifying" if it meets the power threshold AND any specified category/status filters
+            if meets_power_threshold && meets_category_filter && meets_status_filter
+               qualifying_moves_symbols.add(move_symbol) # Add unique move symbol to the Set
             end
           end
+
+          # Now, iterate through the *unique* qualifying move symbols to get their types
+          qualifying_moves_symbols.each do |move_symbol|
+             move_data = @all_moves[move_symbol]
+             valid_move_types.add(move_data['type'].downcase) if move_data && move_data['type'] # Add type to set for unique types
+          end
+
 
           # Check if the number of unique types among qualifying moves meets the requirement
           if required_unique_types > 0 && valid_move_types.size < required_unique_types
             move_based_pokemon_match = false
           end
-          # Note: If only has-moves-with-min-power is used, and no moves meet the criteria,
-          # the unique types check (if also present) will correctly fail if required_unique_types > 0.
-          # If only has-moves-with-min-power is used, and required_unique_types is not,
-          # this section will still pass if there are qualifying moves, which is the desired behavior.
-        end
-        # --- End of new move-based Pokemon filtering logic ---
 
-        # --- New move property filters for Pokemon ---
-        move_category_match = true # Assume true if no category filter is used
-        if options['has-move-category']
-          target_categories = options['has-move-category'].map(&:downcase)
-          move_category_match = (form['moveSet'] || []).any? do |move_entry|
-            move_symbol = move_entry['move'].downcase
-            move_data = @all_moves[move_symbol]
-            next unless move_data
-            move_category = move_data['category'].to_s.downcase
-            target_categories.include?(move_category)
+          # Additionally, if any move-based filter was used, the Pokemon must have at least one qualifying move
+          if (options['has-moves-with-min-power'] || options['has-moves-with-unique-types'] || options['has-move-category'] || options['has-move-status']) && qualifying_moves_symbols.empty?
+             move_based_pokemon_match = false
           end
+
         end
+        # --- End of move-based Pokemon filtering logic ---
 
-        move_status_match = true # Assume true if no status filter is used
-        if options['has-move-status']
-          move_status_match = (form['moveSet'] || []).any? do |move_entry|
-            move_symbol = move_entry['move'].downcase
-            move_data = @all_moves[move_symbol]
-            next unless move_data
-            move_data['moveStatus'] && !move_data['moveStatus'].empty?
-          end
+        # --- Evolution filters ---
+        evolution_match = true # Default to true if neither evolution filter is used
+        # Access evolutions from the first form object
+        evolutions_data = data['forms']&.first&.dig('evolutions')
+
+        if options['can-evolve'] && options['cannot-evolve']
+           # If both are specified, no Pokemon should match this criteria
+           evolution_match = false
+           say "Warning: Both --can-evolve and --cannot-evolve were used. No Pokemon will match the evolution criteria.", :yellow if options['debug-output-file']
+        elsif options['can-evolve']
+          # Pokemon must have a non-empty evolutions array
+          evolution_match = evolutions_data.is_a?(Array) && !evolutions_data.empty?
+          say "DEBUG: Pokemon #{data['dbSymbol']} --can-evolve check: evolutions: #{evolutions_data.inspect}, match: #{evolution_match}", :yellow if options['debug-output-file']
+        elsif options['cannot-evolve']
+          # Pokemon must have an empty or missing evolutions array
+          evolution_match = !evolutions_data.is_a?(Array) || evolutions_data.empty?
+          say "DEBUG: Pokemon #{data['dbSymbol']} --cannot-evolve check: evolutions: #{evolutions_data.inspect}, match: #{evolution_match}", :yellow if options['debug-output-file']
         end
-        # --- End of new move property filters ---
+        # --- End of Evolution filters ---
 
 
-        # Combine all checks, including the new move-based and move property ones
+        # Combine all checks
         stat_match && ability_match && deprecated_move_match && can_learn_move_match &&
         type_match && type1_match && type2_match && has_type2_match &&
-        mono_type_match && learn_method_match && move_based_pokemon_match &&
-        move_category_match && move_status_match
+        mono_type_match && learn_method_match && move_based_pokemon_match && evolution_match
 
       elsif current_entity == 'moves'
         # Move filtering criteria
@@ -1152,8 +1184,8 @@ LONGDESC
 
     def generate_filename
        # Determine the entity for filename generation based on options['can-learn-move'] or other pokemon filters
-      # Added the new options to the check for pokemon-specific filters
-      is_pokemon_filter_used = options['can-learn-move'] || (options['type'] && options[:entity] != 'moves') || options['type1'] || options['type2'] || options['has-type2'] || options['mono-type'] || options['learn-method'] || options['has-moves-with-min-power'] || options['has-moves-with-unique-types'] || options['has-move-category'] || options['has-move-status']
+      # Added the options to the check for pokemon-specific filters
+      is_pokemon_filter_used = options['can-learn-move'] || (options['type'] && options[:entity] != 'moves') || options['type1'] || options['type2'] || options['has-type2'] || options['mono-type'] || options['learn-method'] || options['has-moves-with-min-power'] || options['has-moves-with-unique-types'] || options['has-move-category'] || options['has-move-status'] || options['can-evolve'] || options['cannot-evolve']
       current_entity = is_pokemon_filter_used ? 'pokemon' : options[:entity]
 
 
@@ -1171,21 +1203,21 @@ LONGDESC
         filters << "has_type2" if options['has-type2']
         filters << "mono_type" if options['mono-type']
         filters << "learn_method-#{options['learn-method']}" if options['learn-method']
-        # Add new move-based options to filename
+        # Add move-based options to filename
         filters << "min_move_power-#{options['has-moves-with-min-power']}" if options['has-moves-with-min-power']
         filters << "unique_move_types-#{options['has-moves-with-unique-types']}" if options['has-moves-with-unique-types']
-        # Add new move property filters to filename
+        # Add move property filters to filename
         if options['has-move-category']
           filters << "category-#{options['has-move-category'].map(&:downcase).sort.join('_')}"
         end
         filters << "has_status" if options['has-move-status']
+        # Add evolution filters to filename
+        filters << "can_evolve" if options['can-evolve']
+        filters << "cannot_evolve" if options['cannot-evolve']
 
       elsif current_entity == 'abilities'
         # Add ability frequency filter to filename
         filters << "order_by_frequency-#{options['order-by-frequency']}" if options['order-by-frequency']
-        # Add counting method to filename if counting per form (only if the option was used)
-        # We need to check the options again here or pass the choice
-
       elsif current_entity == 'moves'
         filters << "min_power-#{options['min-power']}" if options['min-power']
         filters << "max_power-#{options['max-power']}" if options['max-power']
