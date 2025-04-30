@@ -4,7 +4,7 @@ PokéSort is a powerful command line data analysis tool to be used with a game b
 
 ## 🛠 Installation & Setup
 
-### 1. Install Ruby
+### Install Ruby
 
 **Windows:**
 
@@ -31,6 +31,12 @@ ruby -v
 ```
 gem install thor
 ```
+
+### Clone/Download PokeSort
+
+PokéSort is a single Ruby script that can be cloned, downloaded, or copied from the [PokéSort GitHub](https://github.com/Piaomu/Poke_Sort). PokéSort will also create a configuration file upon the first use that stores the path to your PSDK game's `Data/Studio` folder and the name of the Pokedex file to query.
+
+Please create a local copy of PokeSort in its own folder.
 
 ## Initial Setup
 
@@ -349,3 +355,7 @@ For issues:
 ```bash
 gem list thor # Should show thor version
 ```
+
+# Contributing
+
+PokéSort is open source on [MIT License](https://github.com/Piaomu/Poke_Sort/blob/main/license.txt). If you'd like to contribute to the [project](https://github.com/Piaomu/Poke_Sort), please submit a pull request!
